@@ -69,9 +69,9 @@ const config: Config = {
         full: "9999px",
       },
       fontFamily: {
-        headline: ["Plus Jakarta Sans", "sans-serif"],
-        body: ["Manrope", "sans-serif"],
-        label: ["Manrope", "sans-serif"],
+        headline: ["var(--font-headline)", "sans-serif"],
+        body: ["var(--font-body)", "sans-serif"],
+        label: ["var(--font-body)", "sans-serif"],
       },
     },
   },
