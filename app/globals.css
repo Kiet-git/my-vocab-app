@@ -1,5 +1,89 @@
 @import "tailwindcss";
 
+/* ── Google Fonts ── */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Manrope:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
+
+/* ── Design Tokens (Tailwind v4 @theme) ── */
+@theme {
+  /* Surfaces */
+  --color-background: #f4f6ff;
+  --color-surface: #f4f6ff;
+  --color-surface-bright: #f4f6ff;
+  --color-surface-dim: #bdd6fc;
+  --color-surface-tint: #4647d3;
+  --color-surface-variant: #c9deff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eaf1ff;
+  --color-surface-container: #dce9ff;
+  --color-surface-container-high: #d2e4ff;
+  --color-surface-container-highest: #c9deff;
+
+  /* Primary */
+  --color-primary: #4647d3;
+  --color-primary-dim: #3939c7;
+  --color-primary-fixed: #9396ff;
+  --color-primary-fixed-dim: #8387ff;
+  --color-primary-container: #9396ff;
+  --color-on-primary: #f4f1ff;
+  --color-on-primary-fixed: #000000;
+  --color-on-primary-fixed-variant: #0e009d;
+  --color-on-primary-container: #0a0081;
+  --color-inverse-primary: #8083ff;
+
+  /* Secondary */
+  --color-secondary: #006576;
+  --color-secondary-dim: #005867;
+  --color-secondary-fixed: #65e1ff;
+  --color-secondary-fixed-dim: #48d4f3;
+  --color-secondary-container: #65e1ff;
+  --color-on-secondary: #def7ff;
+  --color-on-secondary-fixed: #003a45;
+  --color-on-secondary-fixed-variant: #005969;
+  --color-on-secondary-container: #004f5d;
+
+  /* Tertiary */
+  --color-tertiary: #9e00b4;
+  --color-tertiary-dim: #8a009e;
+  --color-tertiary-fixed: #f487ff;
+  --color-tertiary-fixed-dim: #ef6eff;
+  --color-tertiary-container: #f487ff;
+  --color-on-tertiary: #ffeefb;
+  --color-on-tertiary-fixed: #300038;
+  --color-on-tertiary-fixed-variant: #660075;
+  --color-on-tertiary-container: #580065;
+
+  /* Error */
+  --color-error: #b41340;
+  --color-error-dim: #a70138;
+  --color-error-container: #f74b6d;
+  --color-on-error: #ffefef;
+  --color-on-error-container: #510017;
+
+  /* Outline */
+  --color-outline: #68788f;
+  --color-outline-variant: #9eaec7;
+
+  /* On-surface */
+  --color-on-surface: #203044;
+  --color-on-surface-variant: #4d5d73;
+  --color-on-background: #203044;
+  --color-inverse-surface: #000f21;
+  --color-inverse-on-surface: #8e9eb7;
+
+  /* Typography */
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "Manrope", sans-serif;
+
+  /* Border Radius */
+  --radius: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+}
+
+/* ── Custom Utilities ── */
 @layer utilities {
   .material-symbols-outlined {
     font-variation-settings:
@@ -8,6 +92,16 @@
       "GRAD" 0,
       "opsz" 24;
     font-family: "Material Symbols Outlined";
+  }
+
+  .font-headline {
+    font-family: var(--font-headline);
+  }
+  .font-body {
+    font-family: var(--font-body);
+  }
+  .font-label {
+    font-family: var(--font-label);
   }
 
   .glass-refraction {
