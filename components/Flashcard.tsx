@@ -1,47 +1,66 @@
-"use client";
-import { useState } from "react";
-import { Volume2, RefreshCw } from "lucide-react";
+type Variant = "primary" | "secondary" | "tertiary";
 
-export default function Flashcard({ word }: { word: any }) {
-  const [isFlipped, setIsFlipped] = useState(false);
+interface FlashcardProps {
+  word: string;
+  language: string;
+  definition: string;
+  example: string;
+  icon: string;
+  variant?: Variant;
+  isMastered?: boolean;
+}
 
+const styles: Record<Variant, { icon: string; lang: string; border: string; audio: string }> = {
+  primary:   { icon: "text-primary/40",   lang: "text-primary",   border: "border-primary/10",   audio: "text-primary" },
+  secondary: { icon: "text-secondary/40", lang: "text-secondary", border: "border-secondary/10", audio: "text-secondary" },
+  tertiary:  { icon: "text-tertiary/40",  lang: "text-tertiary",  border: "border-tertiary/10",  audio: "text-tertiary" },
+};
+
+export default function Flashcard({
+  word, language, definition, example, icon,
+  variant = "primary", isMastered = false,
+}: FlashcardProps) {
+  const s = styles[variant];
   return (
-    <div
-      className="relative h-80 w-full cursor-pointer group [perspective:1000px]"
-      onClick={() => setIsFlipped(!isFlipped)}
-    >
-      <div
-        className={`w-full h-full transition-all duration-500 [transform-style:preserve-3d] relative ${isFlipped ? "[transform:rotateY(180deg)]" : ""}`}
-      >
-        {/* MẶT TRƯỚC (Tiếng Anh - Trắng) */}
-        <div className="absolute inset-0 w-full h-full bg-white rounded-3xl shadow-md hover:shadow-xl transition-shadow border border-slate-100 flex flex-col items-center justify-center p-8 text-center [backface-visibility:hidden]">
-          <Volume2 className="absolute top-6 right-6 w-6 h-6 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+    <div className="group h-[280px] perspective-1000">
+      <div className="relative w-full h-full transition-all duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)]">
 
-          <h3 className="text-4xl font-extrabold text-slate-800 tracking-tight">
-            {word.word}
-          </h3>
-          {word.pronunciation && (
-            <p className="text-indigo-500 font-medium mt-3 text-xl bg-indigo-50 px-4 py-1 rounded-full">
-              /{word.pronunciation}/
-            </p>
+        {/* ── FRONT ── */}
+        <div className="absolute inset-0 glass-card rounded-[2rem] flex flex-col items-center justify-center p-8 [backface-visibility:hidden] shadow-xl shadow-surface-container/50">
+          {isMastered && (
+            <div className="absolute top-6 right-6">
+              <span className="material-symbols-outlined text-tertiary" style={{ fontVariationSettings: "'FILL' 1" }}>
+                stars
+              </span>
+            </div>
           )}
-          <div className="absolute bottom-6 flex items-center gap-2 text-sm text-slate-400 font-medium">
-            <RefreshCw className="w-4 h-4" /> Bấm để lật thẻ
+          <span className={`material-symbols-outlined ${s.icon} text-4xl mb-4`}>{icon}</span>
+          <h3 className="text-3xl font-headline font-bold text-on-surface text-center">{word}</h3>
+          <p className={`mt-4 text-xs font-bold ${s.lang} tracking-[0.2em] uppercase`}>{language}</p>
+        </div>
+
+        {/* ── BACK ── */}
+        <div className={`absolute inset-0 bg-surface-container-lowest rounded-[2rem] flex flex-col items-center justify-center p-8 [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 ${s.border} shadow-2xl`}>
+          <p className="text-on-surface font-medium text-lg text-center leading-relaxed italic">
+            &ldquo;{definition}&rdquo;
+          </p>
+          <div className="mt-6 w-full pt-6 border-t border-outline-variant/20">
+            <p className="text-on-surface-variant text-sm text-center">Example: {example}</p>
+          </div>
+          {isMastered && (
+            <div className="absolute bottom-6 left-8">
+              <span className="px-2 py-0.5 rounded bg-tertiary-container text-on-tertiary-container text-[10px] font-bold uppercase">
+                Mastered
+              </span>
+            </div>
+          )}
+          <div className={`absolute bottom-6 right-8 ${s.audio}`}>
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+              volume_up
+            </span>
           </div>
         </div>
 
-        {/* MẶT SAU (Tiếng Việt - Nền Gradient) */}
-        <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-indigo-600 to-cyan-600 text-white rounded-3xl shadow-xl flex flex-col items-center justify-center p-8 text-center [backface-visibility:hidden] [transform:rotateY(180deg)]">
-          <h3 className="text-3xl font-bold mb-4">{word.meaning}</h3>
-
-          {word.example_sentence && (
-            <div className="mt-4 p-4 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-sm">
-              <p className="text-white/90 italic text-lg text-pretty">
-                "{word.example_sentence}"
-              </p>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
