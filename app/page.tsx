@@ -61,7 +61,7 @@ const TOPICS = [
 export default function HomePage() {
   return (
     <>
-      <TopNavBar active="home" />
+      <TopNavBar />
 
       <main className="pt-32 pb-24 px-6 md:px-12 lg:px-24">
 

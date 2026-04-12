@@ -10,10 +10,10 @@ interface FlashcardProps {
   isMastered?: boolean;
 }
 
-const styles: Record<
+const S: Record<
   Variant,
   {
-    iconOpacity: string;
+    iconColor: string;
     langColor: string;
     border: string;
     audioColor: string;
@@ -22,7 +22,7 @@ const styles: Record<
   }
 > = {
   primary: {
-    iconOpacity: "opacity-40 text-primary",
+    iconColor: "text-primary opacity-40",
     langColor: "text-primary",
     border: "border-primary/10",
     audioColor: "text-primary",
@@ -30,7 +30,7 @@ const styles: Record<
     masteredText: "text-on-primary-container",
   },
   secondary: {
-    iconOpacity: "opacity-40 text-secondary",
+    iconColor: "text-secondary opacity-40",
     langColor: "text-secondary",
     border: "border-secondary/10",
     audioColor: "text-secondary",
@@ -38,7 +38,7 @@ const styles: Record<
     masteredText: "text-on-secondary-container",
   },
   tertiary: {
-    iconOpacity: "opacity-40 text-tertiary",
+    iconColor: "text-tertiary opacity-40",
     langColor: "text-tertiary",
     border: "border-tertiary/10",
     audioColor: "text-tertiary",
@@ -56,25 +56,29 @@ export default function Flashcard({
   variant = "primary",
   isMastered = false,
 }: FlashcardProps) {
-  const s = styles[variant];
+  const s = S[variant];
 
   return (
     <div className="card-scene h-[280px]">
       <div className="card-inner">
         {/* ── FRONT ── */}
-        <div className="card-face glass-card rounded-[2rem] flex flex-col items-center justify-center p-8 shadow-xl">
+        <div className="card-face glass-card rounded-[2rem] flex flex-col items-center justify-center p-8 shadow-xl shadow-surface-container/50">
           {isMastered && (
             <div className="absolute top-6 right-6">
               <span
                 className="material-symbols-outlined text-tertiary"
-                style={{ fontVariationSettings: "'FILL' 1" }}
+                style={{
+                  fontVariationSettings:
+                    "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                }}
               >
                 stars
               </span>
             </div>
           )}
           <span
-            className={`material-symbols-outlined text-4xl mb-4 ${s.iconOpacity}`}
+            className={`material-symbols-outlined text-4xl mb-4 ${s.iconColor}`}
+            style={{ fontSize: "36px" }}
           >
             {icon}
           </span>
@@ -114,7 +118,10 @@ export default function Flashcard({
           <div className={`absolute bottom-6 right-8 ${s.audioColor}`}>
             <span
               className="material-symbols-outlined"
-              style={{ fontVariationSettings: "'FILL' 1" }}
+              style={{
+                fontVariationSettings:
+                  "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+              }}
             >
               volume_up
             </span>
