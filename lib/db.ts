@@ -1,16 +1,36 @@
 // lib/db.ts
 // Tất cả queries & mutations — dùng trong Server Components / Actions
 
-import { createServerSupabaseClient } from "./supabase";
-import type { LearningStatus, WordStatus } from "./supabase";
+import { createClient } from "@/lib/supabase/server";
+import type {
+  Database,
+  LearningStatus,
+  WordStatus,
+} from "@/lib/supabase/types";
+
+type TopicRow = Database["public"]["Tables"]["topics"]["Row"];
+type WordRow = Database["public"]["Tables"]["words"]["Row"];
+type UserWordProgressRow =
+  Database["public"]["Tables"]["user_word_progress"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+type QuizAnswerInsert = Partial<
+  Database["public"]["Tables"]["quiz_answers"]["Insert"]
+>;
+type StreakLogsInsert = Partial<
+  Database["public"]["Tables"]["streak_logs"]["Insert"]
+>;
+type ProfilesUpdate = Partial<
+  Database["public"]["Tables"]["profiles"]["Update"]
+>;
+type AiJobsInsert = Partial<Database["public"]["Tables"]["ai_jobs"]["Insert"]>;
 
 // ═══════════════════════════════════════════
 // TOPICS
 // ═══════════════════════════════════════════
 
-/** Lấy tất cả topics đã publish, kèm tiến độ của user hiện tại */
 export async function getTopicsWithProgress() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -19,11 +39,12 @@ export async function getTopicsWithProgress() {
     .from("topics")
     .select("*")
     .eq("is_published", true)
-    .order("sort_order")) as unknown as { data: any[]; error: any };
+    .order("sort_order")) as { data: TopicRow[] | null; error: any };
 
   if (error) throw error;
+  const topicsList = topics ?? [];
   if (!user)
-    return (topics ?? []).map((t: any) => ({
+    return topicsList.map((t) => ({
       ...t,
       words_seen: 0,
       words_mastered: 0,
@@ -32,22 +53,27 @@ export async function getTopicsWithProgress() {
   const { data: progress } = (await supabase
     .from("user_topic_progress")
     .select("topic_id, words_seen, words_mastered")
-    .eq("user_id", user.id)) as unknown as { data: any[] };
+    .eq("user_id", user.id)) as {
+    data: Array<{
+      topic_id: string;
+      words_seen: number;
+      words_mastered: number;
+    }> | null;
+  };
 
   const progressMap = Object.fromEntries(
     (progress ?? []).map((p: any) => [p.topic_id, p]),
   );
 
-  return (topics ?? []).map((t: any) => ({
+  return topicsList.map((t) => ({
     ...t,
     words_seen: progressMap[t.id]?.words_seen ?? 0,
     words_mastered: progressMap[t.id]?.words_mastered ?? 0,
   }));
 }
 
-/** Lấy 1 topic theo slug */
 export async function getTopicBySlug(slug: string) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("topics")
     .select("*")
@@ -63,9 +89,8 @@ export async function getTopicBySlug(slug: string) {
 // WORDS
 // ═══════════════════════════════════════════
 
-/** Lấy words của topic kèm progress của user */
 export async function getWordsWithProgress(topicId: string) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -75,27 +100,41 @@ export async function getWordsWithProgress(topicId: string) {
     .select("*")
     .eq("topic_id", topicId)
     .eq("status", "published" as WordStatus)
-    .order("sort_order")) as unknown as { data: any[]; error: any };
+    .order("sort_order")) as { data: WordRow[] | null; error: any };
 
   if (error) throw error;
+  const wordList = words ?? [];
   if (!user)
-    return (words ?? []).map((w: any) => ({
+    return wordList.map((w) => ({
       ...w,
       learning_status: "new" as LearningStatus,
     }));
 
-  const wordIds = (words ?? []).map((w: any) => w.id);
+  if (wordList.length === 0) return [];
+
+  const wordIds = wordList.map((w) => w.id);
   const { data: progress } = (await supabase
     .from("user_word_progress")
     .select("word_id, status, times_correct, times_wrong, next_review_at")
     .eq("user_id", user.id)
-    .in("word_id", wordIds)) as unknown as { data: any[] };
+    .in("word_id", wordIds)) as {
+    data: Array<
+      Pick<
+        UserWordProgressRow,
+        | "word_id"
+        | "status"
+        | "times_correct"
+        | "times_wrong"
+        | "next_review_at"
+      >
+    > | null;
+  };
 
   const progressMap = Object.fromEntries(
     (progress ?? []).map((p: any) => [p.word_id, p]),
   );
 
-  return (words ?? []).map((w: any) => ({
+  return wordList.map((w) => ({
     ...w,
     learning_status: (progressMap[w.id]?.status ?? "new") as LearningStatus,
     times_correct: progressMap[w.id]?.times_correct ?? 0,
@@ -104,9 +143,8 @@ export async function getWordsWithProgress(topicId: string) {
   }));
 }
 
-/** Tìm kiếm từ vựng toàn bộ (dùng pg_trgm) */
 export async function searchWords(query: string, limit = 20) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("words")
     .select("*, topics(slug, title)")
@@ -119,32 +157,29 @@ export async function searchWords(query: string, limit = 20) {
 }
 
 // ═══════════════════════════════════════════
-// LEARNING PROGRESS
+// LEARNING PROGRESS (SM-2)
 // ═══════════════════════════════════════════
 
-/** Cập nhật tiến độ 1 từ sau khi user trả lời (SM-2 algorithm) */
 export async function updateWordProgress(
   wordId: string,
   isCorrect: boolean,
   responseQuality: 0 | 1 | 2 | 3 | 4 | 5 = isCorrect ? 4 : 1,
 ) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  // Lấy progress hiện tại
   const { data: current } = (await supabase
     .from("user_word_progress")
     .select("*")
     .eq("user_id", user.id)
     .eq("word_id", wordId)
-    .single()) as unknown as { data: any };
+    .single()) as { data: UserWordProgressRow | null; error: any };
 
-  // SM-2 Algorithm
-  const ef = (current as any)?.ease_factor ?? 2.5;
-  const reps = (current as any)?.repetitions ?? 0;
+  const ef = current?.ease_factor ?? 2.5;
+  const reps = current?.repetitions ?? 0;
 
   const newEF = Math.max(
     1.3,
@@ -156,7 +191,7 @@ export async function updateWordProgress(
       ? 1
       : newReps === 2
         ? 6
-        : Math.round(((current as any)?.interval_days ?? 1) * newEF);
+        : Math.round((current?.interval_days ?? 1) * newEF);
   const nextReview = new Date(
     Date.now() + newInterval * 86400000,
   ).toISOString();
@@ -170,8 +205,7 @@ export async function updateWordProgress(
           ? "learning"
           : "new";
 
-  // Upsert
-  const { error } = await (supabase.from("user_word_progress") as any).upsert(
+  const { error } = await supabase.from("user_word_progress").upsert(
     {
       user_id: user.id,
       word_id: wordId,
@@ -180,21 +214,19 @@ export async function updateWordProgress(
       interval_days: newInterval,
       repetitions: newReps,
       next_review_at: nextReview,
-      times_seen: ((current as any)?.times_seen ?? 0) + 1,
-      times_correct:
-        ((current as any)?.times_correct ?? 0) + (isCorrect ? 1 : 0),
-      times_wrong: ((current as any)?.times_wrong ?? 0) + (isCorrect ? 0 : 1),
+      times_seen: (current?.times_seen ?? 0) + 1,
+      times_correct: (current?.times_correct ?? 0) + (isCorrect ? 1 : 0),
+      times_wrong: (current?.times_wrong ?? 0) + (isCorrect ? 0 : 1),
       last_seen_at: new Date().toISOString(),
-    },
+    } as Partial<UserWordProgressRow>,
     { onConflict: "user_id,word_id" },
   );
 
   if (error) throw error;
 }
 
-/** Lấy words cần ôn hôm nay (Spaced Repetition) */
 export async function getWordsDueToday(limit = 20) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("words_due_today")
     .select("*")
@@ -208,7 +240,6 @@ export async function getWordsDueToday(limit = 20) {
 // QUIZ
 // ═══════════════════════════════════════════
 
-/** Lưu kết quả quiz session */
 export async function saveQuizSession(payload: {
   topicId: string;
   totalQuestions: number;
@@ -225,16 +256,14 @@ export async function saveQuizSession(payload: {
     distractors?: string[];
   }[];
 }) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  // Tạo session
-  const { data: session, error: sessionErr } = await (
-    supabase.from("quiz_sessions") as any
-  )
+  const { data: session, error: sessionErr } = await supabase
+    .from("quiz_sessions")
     .insert({
       user_id: user.id,
       topic_id: payload.topicId,
@@ -249,31 +278,29 @@ export async function saveQuizSession(payload: {
 
   if (sessionErr) throw sessionErr;
 
-  // Lưu từng đáp án
-  const { error: answersErr } = await (
-    supabase.from("quiz_answers") as any
-  ).insert(
-    payload.answers.map((a) => ({
-      session_id: (session as any).id,
-      word_id: a.wordId,
-      question_type: payload.quizType ?? "multiple_choice",
-      correct_answer: a.correctAnswer,
-      user_answer: a.userAnswer,
-      is_correct: a.isCorrect,
-      time_taken_ms: a.timeTakenMs,
-      distractors: a.distractors ?? [],
-    })),
+  const { error: answersErr } = await supabase.from("quiz_answers").insert(
+    payload.answers.map(
+      (a) =>
+        ({
+          session_id: session.id,
+          word_id: a.wordId,
+          question_type: payload.quizType ?? "multiple_choice",
+          correct_answer: a.correctAnswer,
+          user_answer: a.userAnswer,
+          is_correct: a.isCorrect,
+          time_taken_ms: a.timeTakenMs,
+          distractors: a.distractors ?? [],
+        }) as QuizAnswerInsert,
+    ),
   );
 
   if (answersErr) throw answersErr;
 
-  // Cập nhật progress từng từ
   await Promise.all(
     payload.answers.map((a) => updateWordProgress(a.wordId, a.isCorrect)),
   );
 
-  // Cộng điểm vào profile
-  await (supabase.rpc as any)("increment_points", {
+  await supabase.rpc("increment_points", {
     p_user_id: user.id,
     p_points: payload.scorePoints,
   });
@@ -285,9 +312,8 @@ export async function saveQuizSession(payload: {
 // PROFILE & STREAK
 // ═══════════════════════════════════════════
 
-/** Lấy profile user hiện tại */
 export async function getCurrentProfile() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -303,29 +329,29 @@ export async function getCurrentProfile() {
   return data;
 }
 
-/** Cập nhật streak hàng ngày */
 export async function updateDailyStreak(
   wordsStudied: number,
   quizzesDone: number,
   pointsEarned: number,
 ) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
   const today = new Date().toISOString().split("T")[0];
-  const { data: profile } = (await supabase
+  const { data: profile } = await supabase
     .from("profiles")
     .select("daily_goal")
     .eq("id", user.id)
-    .single()) as unknown as { data: any };
+    .single();
 
-  const goalReached = wordsStudied >= ((profile as any)?.daily_goal ?? 10);
+  const dailyGoal =
+    (profile as { daily_goal?: number } | null)?.daily_goal ?? 10;
+  const goalReached = wordsStudied >= dailyGoal;
 
-  // Upsert streak_logs
-  await (supabase.from("streak_logs") as any).upsert(
+  await supabase.from("streak_logs").upsert(
     {
       user_id: user.id,
       log_date: today,
@@ -333,60 +359,52 @@ export async function updateDailyStreak(
       quizzes_done: quizzesDone,
       points_earned: pointsEarned,
       goal_reached: goalReached,
-    },
+    } as StreakLogsInsert,
     { onConflict: "user_id,log_date" },
   );
 
-  // Cập nhật streak trên profile nếu đạt goal
   if (goalReached) {
     const yesterday = new Date(Date.now() - 86400000)
       .toISOString()
       .split("T")[0];
-    const { data: yesterdayLog } = (await supabase
+    const { data: yLog } = await supabase
       .from("streak_logs")
       .select("goal_reached")
       .eq("user_id", user.id)
       .eq("log_date", yesterday)
-      .single()) as unknown as { data: any };
+      .single();
 
-    const { data: profile2 } = (await supabase
+    const { data: p2 } = await supabase
       .from("profiles")
       .select("current_streak, longest_streak")
       .eq("id", user.id)
-      .single()) as unknown as { data: any };
+      .single();
 
-    const newStreak = (yesterdayLog as any)?.goal_reached
-      ? ((profile2 as any)?.current_streak ?? 0) + 1
-      : 1;
-    const longestStreak = Math.max(
-      newStreak,
-      (profile2 as any)?.longest_streak ?? 0,
-    );
+    const newStreak = yLog?.goal_reached ? (p2?.current_streak ?? 0) + 1 : 1;
+    const longestStreak = Math.max(newStreak, p2?.longest_streak ?? 0);
 
-    await (supabase.from("profiles") as any)
+    await supabase
+      .from("profiles")
       .update({
         current_streak: newStreak,
         longest_streak: longestStreak,
         last_activity_at: today,
-      })
+      } as ProfilesUpdate)
       .eq("id", user.id);
   }
 }
 
-/** Lấy leaderboard */
 export async function getLeaderboard() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("leaderboard").select("*");
-
   if (error) throw error;
   return data;
 }
 
 // ═══════════════════════════════════════════
-// AI JOBS (Admin)
+// AI JOBS
 // ═══════════════════════════════════════════
 
-/** Tạo job generate từ vựng bằng AI */
 export async function createGenerateWordsJob(
   topicId: string,
   options: {
@@ -396,13 +414,14 @@ export async function createGenerateWordsJob(
     style?: string;
   },
 ) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await (supabase.from("ai_jobs") as any)
+  const { data, error } = await supabase
+    .from("ai_jobs")
     .insert({
       job_type: "generate_words",
       topic_id: topicId,
@@ -415,7 +434,7 @@ export async function createGenerateWordsJob(
       },
       ai_provider: "anthropic",
       ai_model: "claude-sonnet-4-20250514",
-    })
+    } as AiJobsInsert)
     .select()
     .single();
 

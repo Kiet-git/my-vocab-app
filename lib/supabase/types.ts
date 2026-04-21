@@ -1,13 +1,6 @@
-// lib/supabase.ts
-// Supabase client + TypeScript types cho toàn bộ schema
+// lib/supabase/types.ts
+// ✅ Import được ở mọi nơi — không phụ thuộc next/headers
 
-import { createBrowserClient, createServerClient } from "@supabase/ssr";
-import type { CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
-
-// ─────────────────────────────────────────
-// Types — khớp hoàn toàn với schema SQL
-// ─────────────────────────────────────────
 export type WordStatus = "draft" | "published" | "archived";
 export type DifficultyLevel = "beginner" | "intermediate" | "advanced";
 export type QuestionType =
@@ -159,7 +152,6 @@ export interface AiJob {
   updated_at: string;
 }
 
-// Database type map cho Supabase client
 export type Database = {
   public: {
     Tables: {
@@ -167,35 +159,56 @@ export type Database = {
         Row: Profile;
         Insert: Partial<Profile>;
         Update: Partial<Profile>;
+        Relationships: never[];
       };
-      topics: { Row: Topic; Insert: Partial<Topic>; Update: Partial<Topic> };
-      words: { Row: Word; Insert: Partial<Word>; Update: Partial<Word> };
+      topics: {
+        Row: Topic;
+        Insert: Partial<Topic>;
+        Update: Partial<Topic>;
+        Relationships: never[];
+      };
+      words: {
+        Row: Word;
+        Insert: Partial<Word>;
+        Update: Partial<Word>;
+        Relationships: never[];
+      };
       user_word_progress: {
         Row: UserWordProgress;
         Insert: Partial<UserWordProgress>;
         Update: Partial<UserWordProgress>;
+        Relationships: never[];
       };
       user_topic_progress: {
         Row: UserTopicProgress;
         Insert: Partial<UserTopicProgress>;
         Update: Partial<UserTopicProgress>;
+        Relationships: never[];
       };
       quiz_sessions: {
         Row: QuizSession;
         Insert: Partial<QuizSession>;
         Update: Partial<QuizSession>;
+        Relationships: never[];
       };
       quiz_answers: {
         Row: QuizAnswer;
         Insert: Partial<QuizAnswer>;
         Update: Partial<QuizAnswer>;
+        Relationships: never[];
       };
       streak_logs: {
         Row: StreakLog;
         Insert: Partial<StreakLog>;
         Update: Partial<StreakLog>;
+        Relationships: never[];
       };
-      ai_jobs: { Row: AiJob; Insert: Partial<AiJob>; Update: Partial<AiJob> };
+      ai_jobs: {
+        Row: AiJob;
+        Insert: Partial<AiJob>;
+        Update: Partial<AiJob>;
+        Relationships: never[];
+      };
     };
     Views: {
       leaderboard: {
@@ -208,12 +221,12 @@ export type Database = {
           | "total_points"
           | "current_streak"
         > & { rank: number };
+        Relationships: never[];
       };
       words_due_today: {
         Row: Word &
           Pick<
             UserWordProgress,
-            | "status"
             | "ease_factor"
             | "interval_days"
             | "repetitions"
@@ -225,41 +238,17 @@ export type Database = {
             topic_slug: string;
             learning_status: LearningStatus;
           };
+        Relationships: never[];
+      };
+    };
+    Functions: {
+      increment_points: {
+        Args: {
+          p_user_id: string;
+          p_points: number;
+        };
+        Returns: null;
       };
     };
   };
 };
-
-// ─────────────────────────────────────────
-// Clients
-// ─────────────────────────────────────────
-
-/** Dùng trong Client Components */
-export function createClient() {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-}
-
-/** Dùng trong Server Components, Route Handlers, Server Actions */
-export async function createServerSupabaseClient() {
-  const cookieStore = await cookies();
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: "", ...options });
-        },
-      },
-    },
-  );
-}

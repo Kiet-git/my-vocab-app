@@ -1,112 +1,94 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import TopNavBar from "@/components/TopNavBar";
+import { createClient } from "@/lib/supabase/client";
+import type { Word } from "@/lib/supabase/types";
 
-const QUIZ_DATA: Record<
-  string,
-  {
-    title: string;
-    questions: {
-      word: string;
-      language: string;
-      correct: string;
-      options: string[];
-      example: string;
-    }[];
-  }
-> = {
-  travel: {
-    title: "Travel Vocabulary",
-    questions: [
-      {
-        word: "Wanderlust",
-        language: "German/English",
-        correct: "A strong desire to travel and explore the world.",
-        options: [
-          "A strong desire to travel and explore the world.",
-          "The feeling of being lost in a foreign city.",
-          "Homesickness for your home country.",
-          "A type of German passport document.",
-        ],
-        example: "Her wanderlust led her to 50 countries by age 30.",
-      },
-      {
-        word: "Dépaysement",
-        language: "French",
-        correct:
-          "The feeling of being in a foreign country; change of scenery.",
-        options: [
-          "A French word for homesickness.",
-          "The feeling of being in a foreign country; change of scenery.",
-          "The excitement of arriving at a new destination.",
-          "A long and exhausting journey.",
-        ],
-        example: "J'adore le dépaysement quand je voyage en Asie.",
-      },
-      {
-        word: "Itinerary",
-        language: "English",
-        correct: "A planned route or journey; a list of places to visit.",
-        options: [
-          "A type of travel insurance.",
-          "The luggage you bring on a trip.",
-          "A planned route or journey; a list of places to visit.",
-          "A travel guidebook for tourists.",
-        ],
-        example: "We need to finalize our itinerary for Paris next week.",
-      },
-      {
-        word: "Fernweh",
-        language: "German",
-        correct:
-          "A longing for far-off places; homesickness for a place you've never been.",
-        options: [
-          "Fear of traveling alone.",
-          "A souvenir brought back from a trip.",
-          "A longing for far-off places; homesickness for a place you've never been.",
-          "The comfort of returning home after a long journey.",
-        ],
-        example: "I have constant fernweh for the mountains of Chile.",
-      },
-      {
-        word: "Voyage",
-        language: "French",
-        correct: "A long journey involving travel by sea or in space.",
-        options: [
-          "A short day trip to a nearby city.",
-          "A long journey involving travel by sea or in space.",
-          "The process of packing your bags.",
-          "A farewell ceremony before a journey.",
-        ],
-        example: "Bon voyage! Have a wonderful trip to Iceland.",
-      },
-    ],
-  },
+type Answer = {
+  wordId: string;
+  correctAnswer: string;
+  userAnswer: string;
+  isCorrect: boolean;
+  timeTakenMs: number;
+  distractors: string[];
 };
 
-const FALLBACK_QUIZ = QUIZ_DATA.travel;
+function shuffle<T>(arr: T[]): T[] {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function buildOptions(correct: string, allDefs: string[]): string[] {
+  const wrong = shuffle(allDefs.filter((d) => d !== correct)).slice(0, 3);
+  return shuffle([correct, ...wrong]);
+}
 
 export default function QuizPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  // ✅ Next.js 15: unwrap params với React.use()
   const { slug } = use(params);
-  const quiz = QUIZ_DATA[slug] ?? FALLBACK_QUIZ;
-  const total = quiz.questions.length;
+  const router = useRouter();
+  const supabase = createClient();
 
+  const [words, setWords] = useState<Word[]>([]);
+  const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState(0);
+  const [options, setOptions] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [answers, setAnswers] = useState<Answer[]>([]);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
-  const [answers, setAnswers] = useState<boolean[]>([]);
+  const [startTime, setStartTime] = useState(Date.now());
+  const [sessionStart] = useState(Date.now());
+  const [topicId, setTopicId] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const q = quiz.questions[current];
-  const isCorrect = selected === q?.correct;
+  const load = useCallback(async () => {
+    const { data: topic } = await supabase
+      .from("topics")
+      .select("id")
+      .eq("slug", slug)
+      .single();
+    if (!topic) {
+      setLoading(false);
+      return;
+    }
+    setTopicId(topic.id);
+
+    const { data: ws } = await supabase
+      .from("words")
+      .select("*")
+      .eq("topic_id", topic.id)
+      .eq("status", "published")
+      .order("sort_order");
+    if (!ws || ws.length < 2) {
+      setLoading(false);
+      return;
+    }
+
+    const shuffled = shuffle((ws as Word[]) || []).slice(0, 10);
+    setWords(shuffled as Word[]);
+    const allDefs = (ws as Word[]).map((w: any) => w.definition);
+    setOptions(buildOptions(shuffled[0].definition, allDefs));
+    setLoading(false);
+    setStartTime(Date.now());
+  }, [slug, supabase]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const q = words[current];
+  const allDefs = words.map((w) => w.definition);
+  const isCorrect = selected === q?.definition;
+  const total = words.length;
+  const pct =
+    total > 0 ? Math.round(((current + (confirmed ? 1 : 0)) / total) * 100) : 0;
 
   const handleSelect = (opt: string) => {
     if (confirmed) return;
@@ -114,50 +96,199 @@ export default function QuizPage({
   };
 
   const handleConfirm = () => {
-    if (!selected) return;
+    if (!selected || !q) return;
     setConfirmed(true);
     if (isCorrect) setScore((s) => s + 1);
   };
 
-  const handleNext = () => {
-    setAnswers((a) => [...a, isCorrect]);
+  const handleNext = async () => {
+    if (!q) return;
+    const ans: Answer = {
+      wordId: q.id,
+      correctAnswer: q.definition,
+      userAnswer: selected ?? "",
+      isCorrect,
+      timeTakenMs: Date.now() - startTime,
+      distractors: options.filter((o) => o !== q.definition),
+    };
+    const newAnswers = [...answers, ans];
+    setAnswers(newAnswers);
+
     if (current + 1 >= total) {
+      // Save results
+      setSaving(true);
+      const finalScore = score + (isCorrect ? 1 : 0);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user && topicId) {
+        // Save quiz session
+        const { data: session } = await supabase
+          .from("quiz_sessions")
+          .insert({
+            user_id: user.id,
+            topic_id: topicId,
+            total_questions: total,
+            correct_answers: finalScore,
+            score_points: finalScore * 10,
+            duration_secs: Math.round((Date.now() - sessionStart) / 1000),
+            quiz_type: "multiple_choice",
+          })
+          .select()
+          .single();
+
+        if (session) {
+          await supabase.from("quiz_answers").insert(
+            newAnswers.map((a) => ({
+              session_id: session.id,
+              word_id: a.wordId,
+              question_type: "multiple_choice",
+              correct_answer: a.correctAnswer,
+              user_answer: a.userAnswer,
+              is_correct: a.isCorrect,
+              time_taken_ms: a.timeTakenMs,
+              distractors: a.distractors,
+            })),
+          );
+        }
+
+        // Update word progress
+        await Promise.all(
+          newAnswers.map(async (a) => {
+            const q = a.isCorrect ? 4 : 1;
+            const { data: cur } = await supabase
+              .from("user_word_progress")
+              .select("*")
+              .eq("user_id", user.id)
+              .eq("word_id", a.wordId)
+              .single();
+            const ef = cur?.ease_factor ?? 2.5;
+            const reps = cur?.repetitions ?? 0;
+            const newEF = Math.max(
+              1.3,
+              ef + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02),
+            );
+            const newReps = q >= 3 ? reps + 1 : 0;
+            const interval =
+              newReps <= 1
+                ? 1
+                : newReps === 2
+                  ? 6
+                  : Math.round((cur?.interval_days ?? 1) * newEF);
+            const status =
+              newReps >= 5
+                ? "mastered"
+                : newReps >= 2
+                  ? "reviewing"
+                  : newReps >= 1
+                    ? "learning"
+                    : "new";
+            await supabase.from("user_word_progress").upsert(
+              {
+                user_id: user.id,
+                word_id: a.wordId,
+                status,
+                ease_factor: newEF,
+                interval_days: interval,
+                repetitions: newReps,
+                next_review_at: new Date(
+                  Date.now() + interval * 86400000,
+                ).toISOString(),
+                times_seen: (cur?.times_seen ?? 0) + 1,
+                times_correct:
+                  (cur?.times_correct ?? 0) + (a.isCorrect ? 1 : 0),
+                times_wrong: (cur?.times_wrong ?? 0) + (a.isCorrect ? 0 : 1),
+                last_seen_at: new Date().toISOString(),
+              },
+              { onConflict: "user_id,word_id" },
+            );
+          }),
+        );
+
+        // Add points
+        await supabase.rpc("increment_points", {
+          p_user_id: user.id,
+          p_points: finalScore * 10,
+        });
+      }
+      setSaving(false);
       setFinished(true);
     } else {
-      setCurrent((c) => c + 1);
+      const next = current + 1;
+      setCurrent(next);
       setSelected(null);
       setConfirmed(false);
+      setStartTime(Date.now());
+      setOptions(buildOptions(words[next].definition, allDefs));
     }
   };
 
   const handleRestart = () => {
+    const shuffled = shuffle(words);
+    setWords(shuffled);
     setCurrent(0);
     setSelected(null);
     setConfirmed(false);
     setScore(0);
     setFinished(false);
     setAnswers([]);
+    setOptions(buildOptions(shuffled[0].definition, allDefs));
+    setStartTime(Date.now());
   };
 
-  const pct = Math.round(((current + (confirmed ? 1 : 0)) / total) * 100);
+  // ── Loading ──
+  if (loading)
+    return (
+      <>
+        <TopNavBar />
+        <div className="bg-mesh min-h-screen flex items-center justify-center pt-20">
+          <div className="text-center space-y-4">
+            <span className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin inline-block" />
+            <p className="text-on-surface-variant font-medium">
+              Loading quiz...
+            </p>
+          </div>
+        </div>
+      </>
+    );
 
-  // ── FINISHED ──
+  if (words.length < 2)
+    return (
+      <>
+        <TopNavBar />
+        <div className="bg-mesh min-h-screen flex items-center justify-center pt-20">
+          <div className="text-center space-y-4">
+            <span className="material-symbols-outlined text-5xl text-on-surface-variant/30 block">
+              quiz
+            </span>
+            <p className="text-on-surface-variant font-medium">
+              Not enough words for a quiz yet.
+            </p>
+            <Link href={`/topic/${slug}`}>
+              <button className="px-6 py-3 bg-primary text-on-primary rounded-xl font-bold">
+                Back to Topic
+              </button>
+            </Link>
+          </div>
+        </div>
+      </>
+    );
+
+  // ── Finished ──
   if (finished) {
-    const finalPct = Math.round((score / total) * 100);
+    const finalScore = answers.filter((a) => a.isCorrect).length;
+    const finalPct = Math.round((finalScore / total) * 100);
     return (
       <>
         <TopNavBar />
         <div className="bg-mesh min-h-screen flex items-center justify-center px-6 pt-20">
-          <div className="max-w-lg w-full text-center space-y-8">
+          <div className="max-w-lg w-full space-y-6">
             <div className="bg-gradient-to-br from-indigo-600 to-cyan-500 p-1 rounded-[2rem]">
-              <div className="bg-surface-container-lowest rounded-[1.9rem] p-12 space-y-6">
+              <div className="bg-surface-container-lowest rounded-[1.9rem] p-12 space-y-6 text-center">
                 <div className="w-24 h-24 bg-tertiary-container/30 rounded-full flex items-center justify-center mx-auto">
                   <span
                     className="material-symbols-outlined text-tertiary text-5xl"
-                    style={{
-                      fontVariationSettings:
-                        "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                    }}
+                    style={{ fontVariationSettings: "'FILL' 1" }}
                   >
                     {finalPct >= 80
                       ? "workspace_premium"
@@ -167,51 +298,55 @@ export default function QuizPage({
                   </span>
                 </div>
                 <div>
-                  <h2 className="text-4xl font-extrabold font-headline mb-2">
+                  <h2 className="text-4xl font-extrabold font-headline">
                     {finalPct >= 80
                       ? "Excellent!"
                       : finalPct >= 50
                         ? "Good Job!"
                         : "Keep Practicing!"}
                   </h2>
-                  <p className="text-on-surface-variant">
+                  <p className="text-on-surface-variant mt-2">
                     You scored{" "}
                     <span className="text-primary font-bold">
-                      {score}/{total}
+                      {finalScore}/{total}
                     </span>{" "}
-                    correct answers.
+                    ·{" "}
+                    <span className="text-tertiary font-bold">
+                      +{finalScore * 10} pts
+                    </span>
                   </p>
                 </div>
-                <div className="flex justify-center gap-2">
-                  {answers.map((correct, i) => (
+                {/* Breakdown */}
+                <div className="flex justify-center gap-2 flex-wrap">
+                  {answers.map((a, i) => (
                     <div
                       key={i}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${correct ? "bg-tertiary-container" : "bg-error-container/20"}`}
+                      className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${a.isCorrect ? "bg-tertiary-container text-tertiary" : "bg-error-container/30 text-error"}`}
                     >
-                      <span
-                        className={`material-symbols-outlined text-[16px] ${correct ? "text-tertiary" : "text-error"}`}
-                        style={{
-                          fontVariationSettings:
-                            "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                        }}
-                      >
-                        {correct ? "check" : "close"}
-                      </span>
+                      {i + 1}
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-col gap-3 pt-2">
-                  <button
-                    onClick={handleRestart}
-                    className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-on-primary rounded-xl font-bold hover:scale-[1.02] transition-all shadow-lg"
-                  >
-                    Try Again
-                  </button>
-                  <Link href={`/topic/${slug}`}>
-                    <button className="w-full py-4 bg-surface-container-highest text-primary rounded-xl font-bold hover:bg-surface-container-high transition-all">
-                      Back to Flashcards
-                    </button>
-                  </Link>
+                  {saving ? (
+                    <div className="flex justify-center py-2">
+                      <span className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={handleRestart}
+                        className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold rounded-xl hover:scale-[1.02] transition-all shadow-lg"
+                      >
+                        Try Again
+                      </button>
+                      <Link href={`/topic/${slug}`}>
+                        <button className="w-full py-4 bg-surface-container-highest text-primary font-bold rounded-xl hover:bg-surface-container-high transition-all">
+                          Back to Flashcards
+                        </button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -221,7 +356,7 @@ export default function QuizPage({
     );
   }
 
-  // ── QUIZ ──
+  // ── Quiz ──
   return (
     <>
       <TopNavBar />
@@ -251,28 +386,39 @@ export default function QuizPage({
             <div className="flex items-center gap-1.5 text-sm font-bold text-tertiary">
               <span
                 className="material-symbols-outlined text-[18px]"
-                style={{
-                  fontVariationSettings:
-                    "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                }}
+                style={{ fontVariationSettings: "'FILL' 1" }}
               >
                 stars
               </span>
-              {score} pts
+              {score * 10} pts
             </div>
           </div>
 
-          {/* Word Card */}
+          {/* Word card */}
           <div className="glass-card rounded-[2rem] p-10 text-center space-y-3 shadow-xl">
+            <div className="flex justify-center mb-2">
+              <div className="w-12 h-12 bg-primary-container/20 rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-2xl">
+                  {q.icon}
+                </span>
+              </div>
+            </div>
             <p className="text-xs font-bold text-primary tracking-[0.2em] uppercase">
               {q.language}
             </p>
             <h2 className="text-5xl font-extrabold font-headline text-on-surface">
-              {q.word}
+              {q.term}
             </h2>
-            <p className="text-on-surface-variant text-sm italic">
-              &ldquo;{q.example}&rdquo;
-            </p>
+            {q.pronunciation && (
+              <p className="text-on-surface-variant italic text-sm">
+                {q.pronunciation}
+              </p>
+            )}
+            {q.example_sentence && (
+              <p className="text-on-surface-variant text-sm">
+                &ldquo;{q.example_sentence}&rdquo;
+              </p>
+            )}
           </div>
 
           <p className="text-center font-semibold text-on-surface-variant">
@@ -281,52 +427,44 @@ export default function QuizPage({
 
           {/* Options */}
           <div className="space-y-3">
-            {q.options.map((opt) => {
+            {options.map((opt) => {
               let style =
                 "bg-surface-container-lowest border-outline-variant/20 hover:border-primary/30 hover:bg-surface-container-low";
               if (confirmed) {
-                if (opt === q.correct)
-                  style =
-                    "bg-tertiary-container/30 border-tertiary text-on-surface";
+                if (opt === q.definition)
+                  style = "bg-tertiary-container/30 border-tertiary";
                 else if (opt === selected)
-                  style = "bg-error-container/20 border-error text-on-surface";
+                  style = "bg-error-container/20 border-error opacity-80";
                 else
                   style =
-                    "bg-surface-container-lowest border-outline-variant/10 opacity-50";
-              } else if (opt === selected) {
+                    "bg-surface-container-lowest border-outline-variant/10 opacity-40";
+              } else if (opt === selected)
                 style = "bg-primary-container/20 border-primary";
-              }
 
               return (
                 <button
                   key={opt}
                   onClick={() => handleSelect(opt)}
-                  className={`w-full text-left px-6 py-4 rounded-xl border-2 transition-all duration-200 font-medium text-on-surface ${style}`}
+                  className={`w-full text-left px-6 py-4 rounded-xl border-2 transition-all duration-150 font-medium text-on-surface ${style}`}
                 >
-                  <div className="flex items-center gap-3">
-                    {confirmed && opt === q.correct && (
+                  <div className="flex items-start gap-3">
+                    {confirmed && opt === q.definition && (
                       <span
-                        className="material-symbols-outlined text-tertiary text-[20px] shrink-0"
-                        style={{
-                          fontVariationSettings:
-                            "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                        }}
+                        className="material-symbols-outlined text-tertiary text-[20px] shrink-0 mt-0.5"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
                       >
                         check_circle
                       </span>
                     )}
-                    {confirmed && opt === selected && opt !== q.correct && (
+                    {confirmed && opt === selected && opt !== q.definition && (
                       <span
-                        className="material-symbols-outlined text-error text-[20px] shrink-0"
-                        style={{
-                          fontVariationSettings:
-                            "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                        }}
+                        className="material-symbols-outlined text-error text-[20px] shrink-0 mt-0.5"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
                       >
                         cancel
                       </span>
                     )}
-                    <span>{opt}</span>
+                    <span className="leading-relaxed">{opt}</span>
                   </div>
                 </button>
               );
@@ -338,7 +476,7 @@ export default function QuizPage({
             <button
               onClick={handleConfirm}
               disabled={!selected}
-              className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-on-primary rounded-xl font-bold text-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] shadow-lg shadow-primary/20"
+              className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-on-primary font-bold text-lg rounded-xl hover:scale-[1.02] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
             >
               Check Answer
             </button>
@@ -349,20 +487,22 @@ export default function QuizPage({
               <div className="flex items-center gap-3">
                 <span
                   className={`material-symbols-outlined text-2xl ${isCorrect ? "text-tertiary" : "text-error"}`}
-                  style={{
-                    fontVariationSettings:
-                      "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                  }}
+                  style={{ fontVariationSettings: "'FILL' 1" }}
                 >
                   {isCorrect ? "check_circle" : "cancel"}
                 </span>
-                <p
-                  className={`font-bold ${isCorrect ? "text-tertiary" : "text-error"}`}
-                >
-                  {isCorrect
-                    ? "Correct! Great job."
-                    : "Not quite. Keep learning!"}
-                </p>
+                <div>
+                  <p
+                    className={`font-bold ${isCorrect ? "text-tertiary" : "text-error"}`}
+                  >
+                    {isCorrect ? "Correct! +10 pts" : "Not quite."}
+                  </p>
+                  {!isCorrect && (
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      The answer was: {q.definition.slice(0, 60)}...
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={handleNext}

@@ -171,3 +171,31 @@
       radial-gradient(at 100% 100%, rgba(158, 0, 180, 0.1) 0px, transparent 50%);
   }
 }
+
+/* ── Admin reusable classes ── */
+.input-field {
+  width: 100%;
+  background-color: var(--color-surface-container-low);
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  outline: none;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.input-field:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  background-color: white;
+}
+
+.label-sm {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.375rem;
+  margin-left: 0.25rem;
+}
