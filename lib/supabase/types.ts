@@ -152,9 +152,17 @@ export interface AiJob {
 }
 
 // ─── Helper type: QuizSession với topic join ─────────────────────────────────
-// Dùng khi query: quiz_sessions.select("..., topics(title,icon)")
-export type QuizSessionWithTopic = QuizSession & {
-  topics: Pick<Topic, "title" | "icon"> | null;
+// Supabase JS trả về foreign-key join dạng ARRAY (không phải object | null).
+// FIX: topics phải là array để match đúng với Supabase response shape.
+// Dùng topics[0] để lấy giá trị đầu tiên khi render.
+export type QuizSessionWithTopic = {
+  id: string;
+  correct_answers: number;
+  total_questions: number;
+  score_points: number;
+  completed_at: string;
+  // Supabase trả về join dạng array: topics(title,icon) → { title, icon }[]
+  topics: { title: string; icon: string }[] | null;
 };
 
 // ─── Helper type: Word với topic join ────────────────────────────────────────

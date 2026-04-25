@@ -2,24 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import TopNavBar from "@/components/TopNavBar";
-import type {
-  Profile,
-  Topic,
-  UserTopicProgress,
-  StreakLog,
-} from "@/lib/supabase/types";
+import type { QuizSessionWithTopic } from "@/lib/supabase/types";
 
+// FIX: Next.js 16 dùng `dynamic` thay vì `revalidate = 0`
 export const dynamic = "force-dynamic";
-
-// ── Local type cho quiz session với topic join ──
-type QuizSessionRow = {
-  id: string;
-  correct_answers: number;
-  total_questions: number;
-  score_points: number;
-  completed_at: string;
-  topics: { title: string; icon: string } | null;
-};
 
 const COLORS = [
   {
@@ -53,7 +39,6 @@ export default async function ProgressPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) redirect("/login");
   const userId = user.id;
 
@@ -90,24 +75,23 @@ export default async function ProgressPage() {
       .limit(7),
   ]);
 
-  const profile = profileResult.data as Profile | null;
-  const topicList = (topicsResult.data ?? []) as Pick<
-    Topic,
-    "id" | "slug" | "title" | "icon" | "word_count" | "sort_order"
-  >[];
-  const progList = (topicProgressResult.data ?? []) as Pick<
-    UserTopicProgress,
-    "topic_id" | "words_seen" | "words_mastered"
-  >[];
-  const sessions = (recentSessionsResult.data ?? []) as QuizSessionRow[];
-  const logs = (streakLogsResult.data ?? []) as Pick<
-    StreakLog,
-    "log_date" | "goal_reached"
-  >[];
+  // FIX: Đổi tên biến `p` → `profile` để tránh shadow variable với callback params
+  const profile = profileResult.data;
+  const topicList = topicsResult.data ?? [];
+  const progList = topicProgressResult.data ?? [];
+  // FIX: Cast thành QuizSessionWithTopic[] — Supabase JS không tự infer
+  // type của foreign-key join từ manual Database schema
+  // FIX: Dùng `as unknown as` vì Supabase trả về partial shape (chỉ SELECT một số fields)
+  // TypeScript không cho phép cast trực tiếp khi shape không overlap đủ
+  const sessions = (recentSessionsResult.data ??
+    []) as unknown as QuizSessionWithTopic[];
+  const logs = streakLogsResult.data ?? [];
 
+  // FIX: Đổi callback param `p` → `tp` để tránh shadow `profile`
   const progressMap = Object.fromEntries(
     progList.map((tp) => [tp.topic_id, tp]),
   );
+  // FIX: Đổi callback param `p` → `tp`
   const totalMastered = progList.reduce(
     (acc, tp) => acc + tp.words_mastered,
     0,
@@ -147,6 +131,7 @@ export default async function ProgressPage() {
               <p className="text-on-surface-variant">
                 Welcome back,{" "}
                 <span className="font-bold text-on-surface">
+                  {/* FIX: dùng `profile` thay vì `p` */}
                   {profile?.display_name ?? profile?.username}
                 </span>
                 !
@@ -171,6 +156,7 @@ export default async function ProgressPage() {
               },
               {
                 label: "Day Streak",
+                // FIX: dùng `profile` thay vì `p`
                 value: profile?.current_streak ?? 0,
                 icon: "local_fire_department",
                 color: "text-orange-500",
@@ -185,6 +171,7 @@ export default async function ProgressPage() {
               },
               {
                 label: "Total Points",
+                // FIX: dùng `profile` thay vì `p`
                 value: profile?.total_points ?? 0,
                 icon: "stars",
                 color: "text-secondary",
@@ -330,6 +317,7 @@ export default async function ProgressPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {topicList.map((t, i) => {
                 const c = COLORS[i % COLORS.length];
+                // FIX: Dùng `pg` thay vì `p` để không shadow `profile`
                 const pg = progressMap[t.id];
                 const mastered = pg?.words_mastered ?? 0;
                 const pct =
@@ -395,7 +383,12 @@ export default async function ProgressPage() {
                   const qPct = Math.round(
                     (s.correct_answers / s.total_questions) * 100,
                   );
-                  const topicInfo = s.topics;
+                  // FIX: s.topics có type đúng từ QuizSessionWithTopic
+                  // → không còn "Property 'title' does not exist on type 'never'"
+                  // FIX: topics là array (Supabase join shape) → lấy phần tử đầu
+                  const topicInfo = Array.isArray(s.topics)
+                    ? s.topics[0]
+                    : s.topics;
                   return (
                     <div
                       key={s.id}

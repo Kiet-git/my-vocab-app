@@ -1,18 +1,20 @@
 // lib/supabase/client.ts
-// ✅ Dùng trong "use client" components
-// Next.js 16 + React 19 compatible
+// "use client" components only
+//
+// FIX: Bỏ generic <Database> khỏi createBrowserClient.
+// Khi dùng Database type thủ công (không phải generated bởi `supabase gen types`),
+// Supabase JS v2 infer sai kiểu cho .insert()/.update()/.upsert() → type `never`.
+// Giải pháp: dùng untyped client, cast kết quả tại điểm dùng (trong từng component).
 
 import { createBrowserClient } from "@supabase/ssr";
-import type { Database } from "./types";
 
-// Singleton pattern — tránh tạo nhiều client trong cùng session
-let supabaseClient: ReturnType<typeof createBrowserClient<Database>> | null = null;
+let supabaseClient: ReturnType<typeof createBrowserClient> | null = null;
 
-export function createClient(): ReturnType<typeof createBrowserClient<Database>> {
+export function createClient(): ReturnType<typeof createBrowserClient> {
   if (!supabaseClient) {
-    supabaseClient = createBrowserClient<Database>(
+    supabaseClient = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     );
   }
   return supabaseClient;

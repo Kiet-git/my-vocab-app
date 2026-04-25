@@ -1,4 +1,5 @@
-import { createServerClient } from "@supabase/ssr";
+// middleware.ts
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
@@ -12,30 +13,29 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          // Apply to request first (required by @supabase/ssr)
+        // FIX: Explicit type cho cookiesToSet — tránh `options` implicit any
+        setAll(
+          cookiesToSet: { name: string; value: string; options?: CookieOptions }[],
+        ) {
           cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
+            request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({ request });
-          // Apply to response
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options),
           );
         },
       },
-    }
+    },
   );
 
-  // IMPORTANT: Do NOT use getSession() in middleware for auth — use getUser()
-  // getUser() validates the JWT with Supabase server (more secure)
+  // getUser() validates JWT with Supabase server (more secure than getSession)
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
 
-  // Protected routes — redirect unauthenticated users to login
   const PROTECTED = ["/profile", "/progress", "/admin"];
   if (PROTECTED.some((r) => pathname.startsWith(r)) && !user) {
     const url = request.nextUrl.clone();
@@ -44,12 +44,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged-in users away from auth pages
   if (user && (pathname === "/login" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Admin guard
   if (pathname.startsWith("/admin") && user?.app_metadata?.role !== "admin") {
     return NextResponse.redirect(new URL("/", request.url));
   }
@@ -59,7 +57,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and static files
     "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf)).*)",
   ],
 };
