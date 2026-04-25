@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-/* ── Design Tokens (Tailwind v4 @theme) ── */
+/* ── Google Fonts — loaded async via layout.tsx <link> tags ── */
+/* Fonts: Plus Jakarta Sans + Manrope từ @theme fontFamily */
+
+/* ── Design Tokens ── */
 @theme {
   --color-background: #f4f6ff;
   --color-surface: #f4f6ff;
@@ -13,7 +16,6 @@
   --color-surface-container: #dce9ff;
   --color-surface-container-high: #d2e4ff;
   --color-surface-container-highest: #c9deff;
-
   --color-primary: #4647d3;
   --color-primary-dim: #3939c7;
   --color-primary-fixed: #9396ff;
@@ -24,7 +26,6 @@
   --color-on-primary-fixed-variant: #0e009d;
   --color-on-primary-container: #0a0081;
   --color-inverse-primary: #8083ff;
-
   --color-secondary: #006576;
   --color-secondary-dim: #005867;
   --color-secondary-fixed: #65e1ff;
@@ -34,7 +35,6 @@
   --color-on-secondary-fixed: #003a45;
   --color-on-secondary-fixed-variant: #005969;
   --color-on-secondary-container: #004f5d;
-
   --color-tertiary: #9e00b4;
   --color-tertiary-dim: #8a009e;
   --color-tertiary-fixed: #f487ff;
@@ -44,13 +44,11 @@
   --color-on-tertiary-fixed: #300038;
   --color-on-tertiary-fixed-variant: #660075;
   --color-on-tertiary-container: #580065;
-
   --color-error: #b41340;
   --color-error-dim: #a70138;
   --color-error-container: #f74b6d;
   --color-on-error: #ffefef;
   --color-on-error-container: #510017;
-
   --color-outline: #68788f;
   --color-outline-variant: #9eaec7;
   --color-on-surface: #203044;
@@ -58,21 +56,16 @@
   --color-on-background: #203044;
   --color-inverse-surface: #000f21;
   --color-inverse-on-surface: #8e9eb7;
-
   --font-headline: "Plus Jakarta Sans", sans-serif;
   --font-body: "Manrope", sans-serif;
   --font-label: "Manrope", sans-serif;
-
   --radius: 0.25rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-full: 9999px;
 }
 
-/* ══════════════════════════════════════════
-   Material Symbols – icon font styles
-   Font được load qua <link> trong layout.tsx
-   ══════════════════════════════════════════ */
+/* ── Material Symbols ── */
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined" !important;
   font-weight: normal;
@@ -85,117 +78,98 @@
   white-space: nowrap;
   word-wrap: normal;
   direction: ltr;
-  -webkit-font-feature-settings: "liga";
   font-feature-settings: "liga";
   -webkit-font-smoothing: antialiased;
-  /* Ẩn text glyph cho đến khi font load xong – không flash chữ */
-  font-display: block;
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 400,
-    "GRAD" 0,
-    "opsz" 24;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  /* Prevent flash — invisible until font loads */
+  visibility: visible;
 }
 
-/* ══════════════════════════════════════════
-   Flashcard 3D Flip
-   Viết thuần CSS – Tailwind v4 không hỗ trợ
-   transform-style và backface-visibility tốt
-   ══════════════════════════════════════════ */
-.card-scene {
-  perspective: 1000px;
-}
-
+/* ── Flashcard 3D ── */
+.card-scene { perspective: 1000px; }
 .card-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  /* 0.35s nhanh hơn, ease-in-out mượt hơn */
+  position: relative; width: 100%; height: 100%;
   transition: transform 0.35s ease-in-out;
   transform-style: preserve-3d;
   will-change: transform;
 }
-
-.card-scene:hover .card-inner {
-  transform: rotateY(180deg);
-}
-
+.card-scene:hover .card-inner { transform: rotateY(180deg); }
 .card-face {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
+.card-face-back { transform: rotateY(180deg); }
 
-.card-face-back {
-  transform: rotateY(180deg);
-}
-
-/* ══════════════════════════════════════════
-   Custom utilities
-   ══════════════════════════════════════════ */
+/* ── Utilities ── */
 @layer utilities {
-  .font-headline {
-    font-family: var(--font-headline);
-  }
-  .font-body {
-    font-family: var(--font-body);
-  }
-  .font-label {
-    font-family: var(--font-label);
-  }
+  .font-headline { font-family: var(--font-headline); }
+  .font-body     { font-family: var(--font-body); }
+  .font-label    { font-family: var(--font-label); }
 
   .glass-refraction {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }
-
   .glass-card {
     background: rgba(255, 255, 255, 0.4);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.2);
   }
-
   .bg-mesh {
     background-color: #f4f6ff;
     background-image:
-      radial-gradient(at 0% 0%, rgba(70, 71, 211, 0.15) 0px, transparent 50%),
-      radial-gradient(
-        at 100% 0%,
-        rgba(101, 225, 255, 0.15) 0px,
-        transparent 50%
-      ),
-      radial-gradient(at 100% 100%, rgba(158, 0, 180, 0.1) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(70,71,211,0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(101,225,255,0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(158,0,180,0.1) 0px, transparent 50%);
   }
-}
 
-/* ── Admin reusable classes ── */
-.input-field {
-  width: 100%;
-  background-color: var(--color-surface-container-low);
-  border: 2px solid transparent;
-  border-radius: 0.75rem;
-  padding: 0.625rem 1rem;
-  outline: none;
-  transition: all 0.2s;
-  font-size: 0.875rem;
-}
+  /* Skeleton shimmer */
+  .skeleton {
+    background: linear-gradient(90deg, #e8efff 25%, #d2e4ff 50%, #e8efff 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 0.5rem;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
 
-.input-field:focus {
-  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
-  background-color: white;
-}
+  /* Admin styles */
+  .input-field {
+    width: 100%;
+    background-color: var(--color-surface-container-low);
+    border: 2px solid transparent;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
+    outline: none;
+    transition: border-color 0.15s, background-color 0.15s;
+    font-size: 0.875rem;
+  }
+  .input-field:focus {
+    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background-color: white;
+  }
+  .label-sm {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.375rem;
+    margin-left: 0.25rem;
+  }
 
-.label-sm {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--color-on-surface-variant);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 0.375rem;
-  margin-left: 0.25rem;
+  /* GPU-accelerated hover transforms */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    will-change: transform;
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px);
+  }
 }

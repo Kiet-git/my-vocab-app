@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Topic, Word, WordStatus } from "@/lib/supabase/types";
 import type { User } from "@supabase/supabase-js";
+import Image from "next/image";
 
 type Tab = "dashboard" | "topics" | "words" | "users";
 type Toast = { msg: string; type: "success" | "error" } | null;
@@ -1258,9 +1259,11 @@ function UsersTab({
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-primary-container/20 flex items-center justify-center shrink-0 overflow-hidden">
                         {u.avatar_url ? (
-                          <img
+                          <Image
                             src={u.avatar_url}
                             alt=""
+                            width={36}
+                            height={36}
                             className="w-full h-full object-cover"
                           />
                         ) : (

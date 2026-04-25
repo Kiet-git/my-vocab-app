@@ -1,16 +1,12 @@
 // lib/supabase/server.ts
-// ✅ Dùng trong Server Components, Server Actions, Route Handlers
-// KHÔNG import file này vào "use client" components
+// ✅ Server Components, Server Actions, Route Handlers only
+// Next.js 16 + @supabase/ssr compatible
 
-import {
-  createServerClient,
-  type CookieOptions,
-  type CookieMethodsServer,
-} from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./types";
 
-export async function createClient(): Promise<any> {
+export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -21,22 +17,16 @@ export async function createClient(): Promise<any> {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(
-          cookiesToSet: Array<{
-            name: string;
-            value: string;
-            options: CookieOptions;
-          }>,
-        ) {
+        setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
+              cookieStore.set(name, value, options)
             );
           } catch {
-            // Server Component không set cookie được — bỏ qua
+            // Server Components cannot set cookies — ignore
           }
         },
-      } as CookieMethodsServer,
-    },
-  ) as any;
+      },
+    }
+  );
 }

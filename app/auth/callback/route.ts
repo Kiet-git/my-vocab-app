@@ -1,5 +1,7 @@
 // app/auth/callback/route.ts
-import { createClient } from "@/lib/supabase/server"; // ✅ server file
+// Next.js 16 Route Handler — handles OAuth + magic link callbacks
+
+import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -10,8 +12,12 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      // Use absolute URL redirect — required in Next.js 16
+      return NextResponse.redirect(`${origin}${next}`);
+    }
   }
 
+  // Auth failed — redirect with error param
   return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
 }

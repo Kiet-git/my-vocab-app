@@ -1,9 +1,8 @@
-// middleware.ts — đặt ở root cạnh package.json
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,58 +12,54 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(
-          cookiesToSet: Array<{
-            name: string;
-            value: string;
-            options?: CookieOptions;
-          }>,
-        ) {
+        setAll(cookiesToSet) {
+          // Apply to request first (required by @supabase/ssr)
           cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
+            request.cookies.set(name, value)
           );
-          response = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request });
+          // Apply to response
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
+            supabaseResponse.cookies.set(name, value, options)
           );
         },
       },
-    },
+    }
   );
 
-  // Refresh session
+  // IMPORTANT: Do NOT use getSession() in middleware for auth — use getUser()
+  // getUser() validates the JWT with Supabase server (more secure)
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   const { pathname } = request.nextUrl;
 
-  // Các route cần đăng nhập
-  const protectedRoutes = ["/profile", "/progress", "/admin"];
-  const isProtected = protectedRoutes.some((r) => pathname.startsWith(r));
-
-  if (isProtected && !user) {
+  // Protected routes — redirect unauthenticated users to login
+  const PROTECTED = ["/profile", "/progress", "/admin"];
+  if (PROTECTED.some((r) => pathname.startsWith(r)) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", pathname);
     return NextResponse.redirect(url);
   }
 
-  // Đã đăng nhập → không cho vào login/register
+  // Redirect logged-in users away from auth pages
   if (user && (pathname === "/login" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
   // Admin guard
-  if (pathname.startsWith("/admin") && user) {
-    const isAdmin = user.app_metadata?.role === "admin";
-    if (!isAdmin) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
+  if (pathname.startsWith("/admin") && user?.app_metadata?.role !== "admin") {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
-  return response;
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  matcher: [
+    // Skip Next.js internals and static files
+    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf)).*)",
+  ],
 };
