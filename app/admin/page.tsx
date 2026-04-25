@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { Topic, Word, WordStatus } from "@/lib/supabase/types";
+import type { Topic, Word, WordStatus, WordWithTopic } from "@/lib/supabase/types";
 import type { User } from "@supabase/supabase-js";
 import Image from "next/image";
 
@@ -667,9 +667,8 @@ function WordsTab({
   supabase: ReturnType<typeof createClient>;
   showToast: (m: string, t?: "success" | "error") => void;
 }) {
-  const [words, setWords] = useState<
-    (Word & { topics: { title: string } | null })[]
-  >([]);
+  // FIX: Dùng WordWithTopic thay vì inline type để tránh lỗi never
+  const [words, setWords] = useState<WordWithTopic[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -704,7 +703,7 @@ function WordsTab({
         .limit(500),
       supabase.from("topics").select("id,title,slug").order("sort_order"),
     ]);
-    setWords((w ?? []) as (Word & { topics: { title: string } | null })[]);
+    setWords((w ?? []) as WordWithTopic[]);
     setTopics(t ?? []);
     if (t && t.length > 0)
       setForm((f) => (f.topic_id ? f : { ...f, topic_id: t[0].id }));
@@ -1083,8 +1082,7 @@ function WordsTab({
                       </td>
                       <td className="px-5 py-4">
                         <span className="px-2 py-0.5 bg-surface-container text-xs font-medium rounded-full text-on-surface-variant">
-                          {(w as Word & { topics: { title: string } | null })
-                            .topics?.title ?? "—"}
+                          {w.topics?.title ?? "—"}
                         </span>
                       </td>
                       <td className="px-5 py-4 max-w-xs">

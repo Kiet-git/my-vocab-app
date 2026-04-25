@@ -2,8 +2,24 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import TopNavBar from "@/components/TopNavBar";
+import type {
+  Profile,
+  Topic,
+  UserTopicProgress,
+  StreakLog,
+} from "@/lib/supabase/types";
 
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
+
+// ── Local type cho quiz session với topic join ──
+type QuizSessionRow = {
+  id: string;
+  correct_answers: number;
+  total_questions: number;
+  score_points: number;
+  completed_at: string;
+  topics: { title: string; icon: string } | null;
+};
 
 const COLORS = [
   {
@@ -37,46 +53,66 @@ export default async function ProgressPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) redirect("/login");
   const userId = user.id;
 
-  const [profile, topics, topicProgress, recentSessions, streakLogs] =
-    await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).single(),
-      supabase
-        .from("topics")
-        .select("id,slug,title,icon,word_count,sort_order")
-        .eq("is_published", true)
-        .order("sort_order"),
-      supabase
-        .from("user_topic_progress")
-        .select("topic_id,words_seen,words_mastered")
-        .eq("user_id", userId),
-      supabase
-        .from("quiz_sessions")
-        .select(
-          "id,correct_answers,total_questions,score_points,completed_at,topics(title,icon)",
-        )
-        .eq("user_id", userId)
-        .order("completed_at", { ascending: false })
-        .limit(5),
-      supabase
-        .from("streak_logs")
-        .select("log_date,goal_reached")
-        .eq("user_id", userId)
-        .order("log_date", { ascending: false })
-        .limit(7),
-    ]);
+  const [
+    profileResult,
+    topicsResult,
+    topicProgressResult,
+    recentSessionsResult,
+    streakLogsResult,
+  ] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", userId).single(),
+    supabase
+      .from("topics")
+      .select("id,slug,title,icon,word_count,sort_order")
+      .eq("is_published", true)
+      .order("sort_order"),
+    supabase
+      .from("user_topic_progress")
+      .select("topic_id,words_seen,words_mastered")
+      .eq("user_id", userId),
+    supabase
+      .from("quiz_sessions")
+      .select(
+        "id,correct_answers,total_questions,score_points,completed_at,topics(title,icon)",
+      )
+      .eq("user_id", userId)
+      .order("completed_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("streak_logs")
+      .select("log_date,goal_reached")
+      .eq("user_id", userId)
+      .order("log_date", { ascending: false })
+      .limit(7),
+  ]);
 
-  const p = profile.data;
-  const topicList = topics.data ?? [];
-  const progList = topicProgress.data ?? [];
-  const sessions = recentSessions.data ?? [];
-  const logs = streakLogs.data ?? [];
+  const profile = profileResult.data as Profile | null;
+  const topicList = (topicsResult.data ?? []) as Pick<
+    Topic,
+    "id" | "slug" | "title" | "icon" | "word_count" | "sort_order"
+  >[];
+  const progList = (topicProgressResult.data ?? []) as Pick<
+    UserTopicProgress,
+    "topic_id" | "words_seen" | "words_mastered"
+  >[];
+  const sessions = (recentSessionsResult.data ?? []) as QuizSessionRow[];
+  const logs = (streakLogsResult.data ?? []) as Pick<
+    StreakLog,
+    "log_date" | "goal_reached"
+  >[];
 
-  const progressMap = Object.fromEntries(progList.map((p) => [p.topic_id, p]));
-  const totalMastered = progList.reduce((a, p) => a + p.words_mastered, 0);
-  const totalWords = topicList.reduce((a, t) => a + t.word_count, 0);
+  const progressMap = Object.fromEntries(
+    progList.map((tp) => [tp.topic_id, tp]),
+  );
+  const totalMastered = progList.reduce(
+    (acc, tp) => acc + tp.words_mastered,
+    0,
+  );
+  const totalWords = topicList.reduce((acc, t) => acc + t.word_count, 0);
   const overallPct =
     totalWords > 0 ? Math.round((totalMastered / totalWords) * 100) : 0;
   const circumference = 2 * Math.PI * 50;
@@ -111,7 +147,7 @@ export default async function ProgressPage() {
               <p className="text-on-surface-variant">
                 Welcome back,{" "}
                 <span className="font-bold text-on-surface">
-                  {p?.display_name ?? p?.username}
+                  {profile?.display_name ?? profile?.username}
                 </span>
                 !
               </p>
@@ -135,7 +171,7 @@ export default async function ProgressPage() {
               },
               {
                 label: "Day Streak",
-                value: p?.current_streak ?? 0,
+                value: profile?.current_streak ?? 0,
                 icon: "local_fire_department",
                 color: "text-orange-500",
                 bg: "bg-orange-100",
@@ -149,7 +185,7 @@ export default async function ProgressPage() {
               },
               {
                 label: "Total Points",
-                value: p?.total_points ?? 0,
+                value: profile?.total_points ?? 0,
                 icon: "stars",
                 color: "text-secondary",
                 bg: "bg-secondary-container/20",
@@ -295,9 +331,11 @@ export default async function ProgressPage() {
               {topicList.map((t, i) => {
                 const c = COLORS[i % COLORS.length];
                 const pg = progressMap[t.id];
-                const m = pg?.words_mastered ?? 0;
+                const mastered = pg?.words_mastered ?? 0;
                 const pct =
-                  t.word_count > 0 ? Math.round((m / t.word_count) * 100) : 0;
+                  t.word_count > 0
+                    ? Math.round((mastered / t.word_count) * 100)
+                    : 0;
                 return (
                   <Link key={t.id} href={`/topic/${t.slug}`} prefetch={true}>
                     <div className="group bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/10 hover:shadow-md hover:-translate-y-1 transition-all cursor-pointer will-change-transform">
@@ -316,7 +354,7 @@ export default async function ProgressPage() {
                             {t.title}
                           </h3>
                           <p className="text-xs text-on-surface-variant">
-                            {m}/{t.word_count} mastered
+                            {mastered}/{t.word_count} mastered
                           </p>
                         </div>
                         {pct === 100 && (
@@ -357,10 +395,7 @@ export default async function ProgressPage() {
                   const qPct = Math.round(
                     (s.correct_answers / s.total_questions) * 100,
                   );
-                  const topic = s.topics as {
-                    title: string;
-                    icon: string;
-                  } | null;
+                  const topicInfo = s.topics;
                   return (
                     <div
                       key={s.id}
@@ -368,12 +403,12 @@ export default async function ProgressPage() {
                     >
                       <div className="w-9 h-9 bg-primary-container/20 rounded-xl flex items-center justify-center shrink-0">
                         <span className="material-symbols-outlined text-primary text-[18px]">
-                          {topic?.icon ?? "quiz"}
+                          {topicInfo?.icon ?? "quiz"}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-on-surface truncate">
-                          {topic?.title ?? "Quiz"}
+                          {topicInfo?.title ?? "Quiz"}
                         </p>
                         <p className="text-xs text-on-surface-variant">
                           {new Date(s.completed_at).toLocaleDateString("en", {
@@ -414,7 +449,7 @@ export default async function ProgressPage() {
             Lucid Polyglot
           </span>
           <p className="text-xs text-on-surface-variant/60">
-            © 2024 Lucid Polyglot.
+            © 2025 Lucid Polyglot.
           </p>
         </div>
       </footer>

@@ -1,5 +1,4 @@
 // lib/supabase/types.ts
-// ✅ Import được ở mọi nơi — không phụ thuộc next/headers
 
 export type WordStatus = "draft" | "published" | "archived";
 export type DifficultyLevel = "beginner" | "intermediate" | "advanced";
@@ -152,6 +151,21 @@ export interface AiJob {
   updated_at: string;
 }
 
+// ─── Helper type: QuizSession với topic join ─────────────────────────────────
+// Dùng khi query: quiz_sessions.select("..., topics(title,icon)")
+export type QuizSessionWithTopic = QuizSession & {
+  topics: Pick<Topic, "title" | "icon"> | null;
+};
+
+// ─── Helper type: Word với topic join ────────────────────────────────────────
+export type WordWithTopic = Word & {
+  topics: Pick<Topic, "title"> | null;
+};
+
+// ─── Database schema ─────────────────────────────────────────────────────────
+// FIX: Thêm Relationships đúng để TypeScript hiểu các foreign-key join.
+// Thiếu Relationships → TypeScript infer field join là `never`.
+
 export type Database = {
   public: {
     Tables: {
@@ -159,55 +173,131 @@ export type Database = {
         Row: Profile;
         Insert: Partial<Profile>;
         Update: Partial<Profile>;
-        Relationships: never[];
+        Relationships: [];
       };
       topics: {
         Row: Topic;
         Insert: Partial<Topic>;
         Update: Partial<Topic>;
-        Relationships: never[];
+        Relationships: [];
       };
       words: {
         Row: Word;
         Insert: Partial<Word>;
         Update: Partial<Word>;
-        Relationships: never[];
+        Relationships: [
+          {
+            foreignKeyName: "words_topic_id_fkey";
+            columns: ["topic_id"];
+            isOneToOne: false;
+            referencedRelation: "topics";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       user_word_progress: {
         Row: UserWordProgress;
         Insert: Partial<UserWordProgress>;
         Update: Partial<UserWordProgress>;
-        Relationships: never[];
+        Relationships: [
+          {
+            foreignKeyName: "user_word_progress_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_word_progress_word_id_fkey";
+            columns: ["word_id"];
+            isOneToOne: false;
+            referencedRelation: "words";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       user_topic_progress: {
         Row: UserTopicProgress;
         Insert: Partial<UserTopicProgress>;
         Update: Partial<UserTopicProgress>;
-        Relationships: never[];
+        Relationships: [
+          {
+            foreignKeyName: "user_topic_progress_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_topic_progress_topic_id_fkey";
+            columns: ["topic_id"];
+            isOneToOne: false;
+            referencedRelation: "topics";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       quiz_sessions: {
         Row: QuizSession;
         Insert: Partial<QuizSession>;
         Update: Partial<QuizSession>;
-        Relationships: never[];
+        Relationships: [
+          {
+            foreignKeyName: "quiz_sessions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "quiz_sessions_topic_id_fkey";
+            columns: ["topic_id"];
+            isOneToOne: false;
+            referencedRelation: "topics";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       quiz_answers: {
         Row: QuizAnswer;
         Insert: Partial<QuizAnswer>;
         Update: Partial<QuizAnswer>;
-        Relationships: never[];
+        Relationships: [
+          {
+            foreignKeyName: "quiz_answers_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "quiz_sessions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "quiz_answers_word_id_fkey";
+            columns: ["word_id"];
+            isOneToOne: false;
+            referencedRelation: "words";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       streak_logs: {
         Row: StreakLog;
         Insert: Partial<StreakLog>;
         Update: Partial<StreakLog>;
-        Relationships: never[];
+        Relationships: [
+          {
+            foreignKeyName: "streak_logs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       ai_jobs: {
         Row: AiJob;
         Insert: Partial<AiJob>;
         Update: Partial<AiJob>;
-        Relationships: never[];
+        Relationships: [];
       };
     };
     Views: {
@@ -221,7 +311,7 @@ export type Database = {
           | "total_points"
           | "current_streak"
         > & { rank: number };
-        Relationships: never[];
+        Relationships: [];
       };
       words_due_today: {
         Row: Word &
@@ -238,7 +328,7 @@ export type Database = {
             topic_slug: string;
             learning_status: LearningStatus;
           };
-        Relationships: never[];
+        Relationships: [];
       };
     };
     Functions: {
