@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-
+import { AIAssistant } from "@/components/AIAssistant";
 export const metadata: Metadata = {
   title: { default: "Lucid Polyglot", template: "%s | Lucid Polyglot" },
   description: "Master vocabulary effortlessly with spaced repetition.",
@@ -47,9 +47,14 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
         />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+        />
       </head>
       <body className="bg-background font-body text-on-surface selection:bg-primary-container selection:text-on-primary-container antialiased">
         {children}
+        <AIAssistant />
       </body>
     </html>
   );
